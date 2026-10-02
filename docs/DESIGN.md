@@ -323,6 +323,7 @@ All checks ran on 2026-10-02. There were 43 Rust tests (`cargo test`) and 89 Nod
 - **Tokens.** The tracker and an independent Python script gave the same total for today, 861.6M, and the same per-provider totals.
 - **Claude active count.** It matched the independent script: 2 busy sessions plus 1 running child.
 - **Codex active count.** This check found a rule error. A turn from 12 hours earlier had no end event, so the first rule counted its thread as running. The rule now counts only the thread's latest turn, and a regression test covers it.
+- **Cost.** 8.6 MB of memory and 0.17% of one core while 6 agents worked, with file events combined over 5 s. With a 2 s window, it was about 0.4%. No child processes.
 - **Panel.** The tracker sent to the mock receiver, and the panel preview showed ONLINE with 3 agents. After `agent-heartbeat stop`, it showed OFFLINE with "—" within one panel refresh.
 - **Keychain.** `secret generate`, then `status`, then `delete` all worked without a prompt. No history file appeared.
 

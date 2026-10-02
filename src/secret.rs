@@ -116,7 +116,7 @@ mod tests {
         assert!(read_file(&open).is_err());
         let private = dir.join("private");
         let _ = fs::remove_file(&private);
-        fs::OpenOptions::new().write(true).create(true).mode(0o600).open(&private).unwrap().write_all(b"s3cret\n").unwrap();
+        fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&private).unwrap().write_all(b"s3cret\n").unwrap();
         assert_eq!(read_file(&private).unwrap(), "s3cret");
     }
 }
