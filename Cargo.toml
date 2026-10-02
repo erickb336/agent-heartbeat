@@ -1,0 +1,31 @@
+[package]
+name = "agent-heartbeat"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+description = "A tiny macOS daemon that reports how many Claude Code and Codex agents run now and how many tokens they used today. Only aggregate counts leave the machine."
+repository = "https://github.com/erickb336/agent-heartbeat"
+readme = "README.md"
+publish = false
+
+# Every dependency is pinned to an exact version. Cargo.lock pins the indirect ones.
+[dependencies]
+jiff = "=0.2.37"           # time zones from /usr/share/zoneinfo, for "today" in Seattle
+libc = "=0.2.189"          # libproc system calls: process start time and open files
+memchr = "=2.8.3"          # fast line splitting and the line-head filter
+notify = "=8.2.0"          # FSEvents file watcher
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.151", features = ["raw_value"] }
+ureq = { version = "=3.4.2", default-features = false, features = ["native-tls"] }  # HTTPS with the macOS TLS stack
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[dev-dependencies]
+# Test fixtures keep JSON keys in the order of the real files: the record type comes first.
+serde_json = { version = "=1.0.151", features = ["raw_value", "preserve_order"] }

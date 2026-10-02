@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "type": "dailyUsage",
+  "observedAt": "2026-10-02T07:00:05.000Z",
+  "usageDate": "2026-10-03",
+  "timeZone": "America/Los_Angeles",
+  "tokens": { "input": 755000000, "cachedInput": 702000000, "output": 312000, "total": 755312000, "coverage": "complete" }
+}

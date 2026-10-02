@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Quiet terminal preview</title>
+<!--
+  Local preview of the "Quiet terminal" panel. The mock receiver serves this page at /.
+  It polls GET /api/workstation/status every 2 s and makes no other request.
+  The visit counts and the note button belong to the site, so they stay inert here.
+-->
+<style>
+  :root {
+    --page: #060707;
+    --dot: rgba(255, 255, 255, 0.07);
+    --card: #0b0c0c;
+    --card-line: #1c1f1e;
+    --term: #0d0f0f;
+    --term-bar: #131615;
+    --term-line: #1f2322;
+    --text: #f1f3f2;
+    --muted: #8b918f;
+    --faint: #646a68;
+    --prompt: #8ccf9f;
+    --ok: #7fd49a;
+    --ok-fill: rgba(127, 212, 154, 0.08);
+    --ok-line: rgba(127, 212, 154, 0.28);
+    --off-fill: rgba(255, 255, 255, 0.04);
+    --off-line: #2a2e2d;
+    --button: #101312;
+    --button-line: #272b2a;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    min-height: 100vh;
+    padding: 56px 16px;
+    background-color: var(--page);
+    background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+    background-size: 18px 18px;
+    color: var(--text);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 680px; margin: 0 auto; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--card-line);
+    border-radius: 16px;
+    padding: 28px;
+  }
+  .eyebrow {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 6px 16px;
+    font: 500 11px/1.4 var(--mono);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+  h1 {
+    margin: 22px 0 8px;
+    font: 700 clamp(28px, 6vw, 40px)/1.1 var(--sans);
+    letter-spacing: -0.02em;
+  }
+  .sub { margin: 0 0 24px; color: var(--muted); font-size: 15px; line-height: 1.5; }
+
+  .term { border: 1px solid var(--term-line); border-radius: 12px; background: var(--term); overflow: hidden; }
+  .term-bar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px 12px;
+    padding: 10px 14px;
+    background: var(--term-bar);
+    border-bottom: 1px solid var(--term-line);
+    font: 12px/1.4 var(--mono);
+    color: var(--muted);
+  }
+  .pill {
+    font: 500 11px/1 var(--mono);
+    letter-spacing: 0.12em;
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--off-line);
+    background: var(--off-fill);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .pill[data-state="online"] { color: var(--ok); background: var(--ok-fill); border-color: var(--ok-line); }
+
+  .term-body { padding: 18px 18px 16px; font-family: var(--mono); }
+  .prompt { margin: 0 0 20px; color: var(--prompt); font-size: 13px; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 24px 16px; margin: 0; }
+  .stat { margin: 0; min-width: 0; }
+  .stat dt { font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+  .stat .num {
+    margin: 6px 0 4px;
+    font-size: clamp(26px, 7.5vw, 40px);
+    font-weight: 500;
+    line-height: 1.15;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .stat .cap { margin: 0; font-size: 12px; line-height: 1.4; color: var(--muted); }
+  .stat.site { opacity: 0.45; }
+
+  .rule { border: 0; border-top: 1px solid var(--term-line); margin: 22px 0 14px; }
+  .log { list-style: none; margin: 0; padding: 0; font-size: 12.5px; line-height: 1.9; color: var(--muted); }
+
+  .below {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--card-line);
+  }
+  .note {
+    font: 13px/1 var(--mono);
+    color: #cfd3d1;
+    background: var(--button);
+    border: 1px solid var(--button-line);
+    border-radius: 10px;
+    padding: 12px 16px;
+    cursor: default;
+  }
+
+  @media (max-width: 480px) {
+    body { padding: 24px 16px; }
+    .card { padding: 18px; }
+    .term-bar { font-size: 10.5px; padding: 10px 12px; gap: 8px; }
+    .pill { padding: 4px 8px; letter-spacing: 0.08em; }
+    .term-body { padding: 16px 14px 14px; }
+    .stat .cap { font-size: 11.5px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <section class="card" aria-labelledby="title">
+    <div class="eyebrow"><span>08 / At the desk</span><span>Local preview · mock receiver</span></div>
+    <h1 id="title">Behind the keyboard.</h1>
+    <p class="sub">A small signal from my corner of Seattle.</p>
+
+    <div class="term">
+      <div class="term-bar">
+        <span>erick@seattle ~ workstation</span>
+        <span class="pill" id="pill" role="status" data-state="offline">● OFFLINE</span>
+      </div>
+      <div class="term-body">
+        <p class="prompt">~ $ status --today</p>
+        <dl class="stats">
+          <div class="stat">
+            <dt>Active agents</dt>
+            <dd class="num" id="agents-num">—</dd>
+            <dd class="cap" id="agents-cap">tracker disconnected</dd>
+          </div>
+          <div class="stat">
+            <dt>Tokens</dt>
+            <dd class="num" id="tokens-num">—</dd>
+            <dd class="cap">processed today (PT)</dd>
+          </div>
+          <div class="stat site">
+            <dt>Visits / week</dt>
+            <dd class="num">—</dd>
+            <dd class="cap">site data, not from tracker</dd>
+          </div>
+          <div class="stat site">
+            <dt>Visits / total</dt>
+            <dd class="num">—</dd>
+            <dd class="cap">site data, not from tracker</dd>
+          </div>
+        </dl>
+        <hr class="rule">
+        <ul class="log">
+          <li>→ Work details stay private</li>
+          <li id="agents-line">→ Agent count unknown</li>
+          <li id="beat-line">→ No heartbeat yet</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <div class="below">
+    <button type="button" class="note" aria-disabled="true" title="Inert in this preview. The site owns this button.">Pass me a note ↗</button>
+  </div>
+</main>
+
+<script>
+  'use strict';
+  const POLL_MS = 2000;
+  const TIMEOUT_MS = 1500;
+  const DASH = '—';
+
+  /** The last good status and the page clock when it arrived, or null when the last poll failed. */
+  let latest = null;
+
+  const el = (id) => document.getElementById(id);
+
+  function setText(id, text) {
+    const node = el(id);
+    if (node.textContent !== text) node.textContent = text;
+    if (node.classList.contains('num')) {
+      if (text === DASH) node.setAttribute('aria-label', 'unknown');
+      else node.removeAttribute('aria-label');
+    }
+  }
+
+  /** 999 -> "999", 128_400 -> "128.4k", 755_312_000 -> "755.3M". Rounds down, so it never overstates. */
+  function compact(n) {
+    const units = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'k']];
+    for (const [size, suffix] of units) {
+      if (n >= size) return (Math.floor((n * 10) / size) / 10).toFixed(1) + suffix;
+    }
+    return String(n);
+  }
+
+  function ago(ms) {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    if (s === 1) return '1 second ago';
+    if (s < 120) return s + ' seconds ago';
+    const m = Math.floor(s / 60);
+    if (m < 120) return m + ' minutes ago';
+    const h = Math.floor(m / 60);
+    if (h < 48) return h + ' hours ago';
+    return Math.floor(h / 24) + ' days ago';
+  }
+
+  function agentsView(status) {
+    const { active, coverage } = status.agents;
+    if (active === null) {
+      const cap = status.tracker === 'connected' ? 'count unavailable' : 'tracker disconnected';
+      return { num: DASH, cap, line: 'Agent count unknown' };
+    }
+    if (coverage === 'partial') {
+      const line = active === 0 ? 'Agent count incomplete' : 'At least ' + active + (active === 1 ? ' agent' : ' agents') + ' active';
+      return { num: active + '+', cap: 'known subtotal', line };
+    }
+    const line = active === 0 ? 'No agents running' : active + (active === 1 ? ' agent' : ' agents') + ' active';
+    return { num: String(active).padStart(2, '0'), cap: 'connected agents', line };
+  }
+
+  function tokensText(status) {
+    const t = status.tokensToday;
+    if (!t || t.total === null) return DASH;
+    return compact(t.total) + (t.coverage === 'partial' ? '+' : '');
+  }
+
+  function render() {
+    const pill = el('pill');
+    if (!latest) {
+      pill.dataset.state = 'offline';
+      setText('pill', '● OFFLINE');
+      setText('agents-num', DASH);
+      setText('agents-cap', 'status unavailable');
+      setText('tokens-num', DASH);
+      setText('agents-line', '→ Agent count unknown');
+      setText('beat-line', '→ Status endpoint not reachable');
+      return;
+    }
+    const { status, receivedAt } = latest;
+    const online = status.status === 'online';
+    pill.dataset.state = online ? 'online' : 'offline';
+    setText('pill', online ? '● ONLINE' : '● OFFLINE');
+
+    const agents = agentsView(status);
+    setText('agents-num', agents.num);
+    setText('agents-cap', agents.cap);
+    setText('agents-line', '→ ' + agents.line);
+    setText('tokens-num', tokensText(status));
+
+    if (!status.lastHeartbeatAt) {
+      setText('beat-line', '→ No heartbeat yet');
+    } else {
+      // Age by the receiver's clock (asOf), plus the time since this response arrived.
+      const age = Date.parse(status.asOf) - Date.parse(status.lastHeartbeatAt) + (performance.now() - receivedAt);
+      setText('beat-line', '→ Last heartbeat ' + ago(age));
+    }
+  }
+
+  async function poll() {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+      const response = await fetch('/api/workstation/status', { cache: 'no-store', signal: controller.signal });
+      if (!response.ok) throw new Error('status ' + response.status);
+      latest = { status: await response.json(), receivedAt: performance.now() };
+    } catch {
+      latest = null;
+    } finally {
+      clearTimeout(timer);
+    }
+    render();
+    setTimeout(poll, POLL_MS);
+  }
+
+  setInterval(render, 1000);
+  poll();
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "type": "heartbeat",
+  "observedAt": "2026-10-02T17:04:30.250Z",
+  "ttlSeconds": 90,
+  "usageDate": "2026-10-02",
+  "timeZone": "America/Los_Angeles",
+  "agents": { "active": 2, "coverage": "partial" },
+  "tokens": { "input": 90000, "cachedInput": 70000, "output": 5000, "total": 95000, "coverage": "partial" }
+}

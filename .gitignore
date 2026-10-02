@@ -1,0 +1,9 @@
+/target/
+node_modules/
+*.log
+.DS_Store
+# Never commit local state, secrets or real transcripts.
+state.json
+last-send.json
+secret
+*.secret

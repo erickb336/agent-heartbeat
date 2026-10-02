@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "status": "offline",
+  "tracker": "connected",
+  "agents": { "active": 0, "coverage": "complete" },
+  "tokensToday": { "usageDate": "2026-10-02", "total": 128400, "input": 120000, "cachedInput": 96000, "output": 8400, "coverage": "complete" },
+  "lastHeartbeatAt": "2026-10-02T17:05:00.900Z",
+  "asOf": "2026-10-02T17:05:10.000Z"
+}

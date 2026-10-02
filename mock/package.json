@@ -1,0 +1,18 @@
+{
+  "name": "agent-heartbeat-mock-receiver",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A local stand-in for the site's heartbeat receiver, with a preview of the panel. A development tool; not part of the tracker binary.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test --test-reporter=spec 'test/*.test.js'"
+  },
+  "dependencies": {
+    "ajv": "8.20.0"
+  }
+}
