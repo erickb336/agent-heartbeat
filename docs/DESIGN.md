@@ -267,7 +267,7 @@ If a source format changes, only that adapter changes.
 
 | Setting | Value | Reason |
 |---|---|---|
-| Wake-up | On file events (FSEvents, combined over 5 s), plus the keepalive timer | No polling when nothing changes. One observation costs a few milliseconds, so the 5 s window keeps CPU near 0.1% of one core while agents write. The panel polls every 10–15 s, so visitors see no difference. |
+| Wake-up | On file events (FSEvents, combined over 5 s), plus the keepalive timer | No polling when nothing changes. One observation costs a few milliseconds, so the 5 s window keeps CPU near 0.17% of one core while agents write. With the panel's 5 s checks and a 2 s status cache, a change reaches a visitor within about 12 s at worst ([CONTRACT.md](CONTRACT.md#display-rules)). |
 | Heartbeat while agents run | On each change of the active count, and every 30 s. `ttlSeconds` = 90. | A change reaches the site within about 5 s. The site tolerates 2 lost heartbeats. |
 | Heartbeat while no agent runs | Every 120 s. `ttlSeconds` = 300. | The panel shows Offline anyway. A slow lease changes only "0" versus "—" for up to 5 minutes after a crash. |
 | Freshness on the site | Connected while `receivedAt + ttlSeconds` is in the future, by the site's clock | The tracker never decides freshness. |
@@ -323,7 +323,8 @@ All checks ran on 2026-10-02. There were 43 Rust tests (`cargo test`) and 89 Nod
 - **Tokens.** The tracker and an independent Python script gave the same total for today, 861.6M, and the same per-provider totals.
 - **Claude active count.** It matched the independent script: 2 busy sessions plus 1 running child.
 - **Codex active count.** This check found a rule error. A turn from 12 hours earlier had no end event, so the first rule counted its thread as running. The rule now counts only the thread's latest turn, and a regression test covers it.
-- **Cost.** 8.6 MB of memory and 0.17% of one core while 6 agents worked, with file events combined over 5 s. With a 2 s window, it was about 0.4%. No child processes.
+- **Cost.** 8.6 MB of memory and 0.17% of one core while 6 agents worked, with file events combined over 5 s. With a 2 s window, it was about 0.4%. Over 90 minutes of real use, the average was 0.107% of one core (5.8 s of CPU) and 7.2 MB, with 309 heartbeats, 13 log lines and a 100 KB state file. No child processes.
+- **Registry glitch.** Once in 90 minutes, the Claude live state showed `degraded` for one 5 s cycle. The cause is most likely a session file read while Claude Code rewrote or deleted it. The tracker now skips a deleted file, retries a half-written one once after 20 ms, and logs the reason with each health change.
 - **Panel.** The tracker sent to the mock receiver, and the panel preview showed ONLINE with 3 agents. After `agent-heartbeat stop`, it showed OFFLINE with "—" within one panel refresh.
 - **Keychain.** `secret generate`, then `status`, then `delete` all worked without a prompt. No history file appeared.
 

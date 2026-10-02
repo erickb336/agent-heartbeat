@@ -7,7 +7,8 @@
 <title>Quiet terminal preview</title>
 <!--
   Local preview of the "Quiet terminal" panel. The mock receiver serves this page at /.
-  It polls GET /api/workstation/status every 2 s and makes no other request.
+  It checks GET /api/workstation/status every 5 s while the tab is visible, stops while it is hidden,
+  and makes no other request.
   The visit counts and the note button belong to the site, so they stay inert here.
 -->
 <style>
@@ -195,7 +196,7 @@
 
 <script>
   'use strict';
-  const POLL_MS = 2000;
+  const POLL_MS = 5000; // docs/CONTRACT.md: every 5 s while the tab is visible
   const TIMEOUT_MS = 1500;
   const DASH = '—';
 
@@ -285,7 +286,14 @@
     }
   }
 
+  let next = null; // the scheduled check, or null while hidden
+  let inFlight = false;
+
   async function poll() {
+    clearTimeout(next);
+    next = null;
+    if (inFlight) return;
+    inFlight = true;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
@@ -296,11 +304,23 @@
       latest = null;
     } finally {
       clearTimeout(timer);
+      inFlight = false;
     }
     render();
-    setTimeout(poll, POLL_MS);
+    if (!document.hidden) next = setTimeout(poll, POLL_MS);
   }
 
+  // Check only while a visitor can see the panel. Check at once when the tab becomes visible again.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      clearTimeout(next);
+      next = null;
+    } else {
+      poll();
+    }
+  });
+
+  // Between checks, the "N seconds ago" line still counts up every second.
   setInterval(render, 1000);
   poll();
 </script>

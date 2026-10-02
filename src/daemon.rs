@@ -30,8 +30,8 @@ enum Event {
 }
 
 /// File events are combined: at most one observation every 5 s. One observation costs a few
-/// milliseconds, so this keeps CPU near 0.1% of one core while agents write. The site's panel
-/// polls every 10–15 s, so visitors cannot see the difference.
+/// milliseconds, so this keeps CPU near 0.17% of one core while agents write. With the panel's 5 s
+/// checks and a 2 s status cache, a change reaches a visitor within about 12 s (docs/CONTRACT.md).
 const MIN_OBSERVE_GAP: Duration = Duration::from_secs(5);
 const UNAUTHORIZED_RETRY: Duration = Duration::from_secs(300);
 const SAVE_EVERY: Duration = Duration::from_secs(600);
@@ -215,7 +215,12 @@ fn health_summary(engine: &Engine) -> String {
     engine
         .last
         .iter()
-        .map(|r| format!("{} agents {:?} usage {:?}", r.provider.name(), r.agents_health.health, r.usage_health.health).to_lowercase())
+        .map(|r| {
+            // Notes are fixed phrases with numbers only, never a path, a name or content.
+            let notes: Vec<&str> = r.agents_health.notes.iter().chain(&r.usage_health.notes).map(String::as_str).collect();
+            let detail = if notes.is_empty() { String::new() } else { format!(" ({})", notes.join("; ")) };
+            format!("{} agents {:?} usage {:?}{detail}", r.provider.name(), r.agents_health.health, r.usage_health.health).to_lowercase()
+        })
         .collect::<Vec<_>>()
         .join("; ")
 }

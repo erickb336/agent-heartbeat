@@ -244,6 +244,16 @@ describe('request checks', () => {
     assert.equal((await r.post(r.heartbeat({ offsetMs: -120_000 }))).status, 204);
   });
 
+  test('only the status may be cached, for 2 s; heartbeat answers are never cached', async (t) => {
+    const r = await setup(t);
+    const statusResponse = await fetch(r.url + STATUS_PATH);
+    assert.equal(statusResponse.headers.get('cache-control'), 'public, max-age=2');
+    const accepted = await r.post(r.heartbeat());
+    assert.equal(accepted.headers.get('cache-control'), 'no-store');
+    const rejected = await r.post(r.heartbeat(), { secret: 'wrong' });
+    assert.equal(rejected.headers.get('cache-control'), 'no-store');
+  });
+
   test('only the three routes exist', async (t) => {
     const r = await setup(t);
     const cases = [
@@ -524,7 +534,7 @@ describe('public status', () => {
     ]);
     const response = await fetch(r.url + STATUS_PATH);
     assert.equal(response.headers.get('content-type'), 'application/json; charset=utf-8');
-    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.equal(response.headers.get('cache-control'), 'public, max-age=2');
   });
 
   test('the status samples in contract/samples match the documented shape', () => {

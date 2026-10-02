@@ -187,9 +187,13 @@ impl ClaudeAdapter {
             if !is_entry {
                 continue;
             }
-            let Some(entry) = fs::read(&path).ok().and_then(|b| serde_json::from_slice::<RegistryEntry>(&b).ok()) else {
-                unreadable += 1;
-                continue;
+            let entry = match read_registry_entry(&path) {
+                Entry::Found(entry) => entry,
+                Entry::Gone => continue, // the session ended after the listing
+                Entry::Unreadable => {
+                    unreadable += 1;
+                    continue;
+                }
             };
             if !is_alive(probe, entry.pid, entry.proc_start.as_deref()) {
                 continue; // The process ended or crashed, or a new process reuses its ID.
@@ -223,6 +227,33 @@ impl ClaudeAdapter {
         }
         (Some(counts), health)
     }
+}
+
+enum Entry {
+    Found(RegistryEntry),
+    Gone,
+    Unreadable,
+}
+
+/// Claude Code rewrites a registry file in place when the status changes, and deletes it when the
+/// session exits. A read can land in the middle of either, so a deleted file is skipped and a
+/// half-written one gets one more try.
+fn read_registry_entry(path: &Path) -> Entry {
+    for attempt in 0..2 {
+        match fs::read(path) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Entry::Gone,
+            Ok(bytes) => {
+                if let Ok(entry) = serde_json::from_slice::<RegistryEntry>(&bytes) {
+                    return Entry::Found(entry);
+                }
+            }
+            Err(_) => {}
+        }
+        if attempt == 0 {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
+    Entry::Unreadable
 }
 
 fn parse_line(bytes: &[u8], window_start: i64, usage: &mut Vec<UsageRecord>, finished: &mut bool, c: &mut Counters) {
@@ -337,6 +368,22 @@ mod tests {
         claude_child(&home, "s-live", "agent-stalled", NOW - CHILD_STALL_MS - 1_000, false);
         let r = adapter(&home).poll(&probe, NOW, NOW - 86_400_000);
         assert_eq!(r.agents.unwrap().running, 1);
+    }
+
+    #[test]
+    fn an_ended_session_is_skipped_but_a_broken_entry_degrades() {
+        let home = temp_home("claude-registry");
+        let mut probe = FakeProbe::default();
+        claude_registry(&home, 401, "s-live", "busy", START);
+        probe.starts.insert(401, START);
+        // Deleted between the listing and the read: a dangling link reads as "not found".
+        std::os::unix::fs::symlink(home.join("sessions/gone.json"), home.join("sessions/402.json")).unwrap();
+        let r = adapter(&home).poll(&probe, NOW, 0);
+        assert_eq!((r.agents.unwrap().running, r.agents_health.health), (1, crate::model::Health::Ok));
+        fs::write(home.join("sessions/403.json"), "{\"pid\": 403, \"sessionId\"").unwrap();
+        let r = adapter(&home).poll(&probe, NOW, 0);
+        assert_eq!(r.agents_health.health, crate::model::Health::Degraded);
+        assert_eq!(r.agents_health.notes, vec!["1 registry entries unreadable".to_string()]);
     }
 
     #[test]

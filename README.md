@@ -15,9 +15,10 @@ Measured on my Mac on 2026-10-02, while three agents worked:
 | | |
 |---|---|
 | Binary | 1.3 MB, one file |
-| Memory | 8–10 MB |
+| Memory | 7–10 MB |
 | CPU when no agent writes | none: the process sleeps until the next keepalive |
 | CPU under heavy agent activity | 0.17% of one core, measured while 6 agents worked |
+| CPU over 90 minutes of real use | 0.11% of one core on average (5.8 s in total), with 309 heartbeats sent and 13 log lines written |
 | First run, importing today's 1.15 GB of session files | 0.44 s |
 | Child processes | none: process checks use `libproc` system calls instead of `ps` and `lsof` |
 | Network | one small HTTPS POST on each change, plus one every 30 s while agents run, or every 120 s when none run |

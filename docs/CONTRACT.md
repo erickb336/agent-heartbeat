@@ -1,6 +1,6 @@
 # Heartbeat contract, version 1
 
-**Status:** proposal. Contract version 1 (`"schemaVersion": 1`), document revision 1, 2026-10-02. The production receiver does not exist yet.
+**Status:** proposal. Contract version 1 (`"schemaVersion": 1`), document revision 2, 2026-10-02. Revision 2 sets how the panel refreshes (every 5 s while visible) and caches the status for 2 s. The messages did not change. The production receiver does not exist yet.
 
 This document tells the builder of erickbenitez.com how to receive heartbeats from `agent-heartbeat` and how to show them in the "Quiet terminal" panel. It is the only interface between the tracker and the site. The tracker sends aggregate numbers only: an active agent count, today's token counts, coverage and timestamps.
 
@@ -285,7 +285,9 @@ The receiver checks each `POST` in this order. It stops at the first failure.
 | `asOf` | The receiver's clock when it built the response. |
 
 - There are no other fields. Never copy fields from a message into the response.
-- The mock sends `Cache-Control: no-store`. The site may cache the response for up to 5 s.
+- **Cache the status for 2 s.** Send `Cache-Control: public, max-age=2`. On Cloudflare Workers, that header alone does not cache a response that the Worker builds itself: store the response with the Cache API (`caches.default`) for 2 s, keyed by the URL. The Cache API is local to each data center. So whatever the number of visitors, the Worker reads D1 at most once every 2 s in each data center that serves them. ([Cloudflare: how the cache works](https://developers.cloudflare.com/workers/reference/how-the-cache-works/))
+- Never cache the heartbeat endpoint. Its answers carry `Cache-Control: no-store`.
+- The mock sends the same headers. It has no shared cache, so each request reads its memory.
 - Samples: [`status-online.json`](../contract/samples/status-online.json), [`status-idle.json`](../contract/samples/status-idle.json) and [`status-disconnected.json`](../contract/samples/status-disconnected.json).
 
 ## Display rules
@@ -304,7 +306,28 @@ The mock serves a preview of the panel at `GET /`. Its code is in [`mock/preview
 | `tokensToday` is `null`, or `total` is `null` | `—` |
 | Visits | Site data. The tracker does not send it. |
 | Footer, agent line | "N agents active", "No agents running" (complete 0), "At least N agents active" (partial), "Agent count unknown" (`null`) |
-| Footer, heartbeat line | "Last heartbeat N seconds ago", from `asOf − lastHeartbeatAt`, so the visitor's clock does not matter. "No heartbeat yet" when `lastHeartbeatAt` is `null`. |
+| Footer, heartbeat line | "Last heartbeat N seconds ago", from `asOf − lastHeartbeatAt` plus the time since the response arrived, so the visitor's clock does not matter. It counts up every second between checks. "No heartbeat yet" when `lastHeartbeatAt` is `null`. |
+
+**Refresh.** The panel checks the status endpoint on this schedule:
+
+1. Check once when the page loads.
+2. While the tab is visible, check again 5 s after each answer.
+3. While the tab is hidden (`document.hidden`), do not check. Listen for `visibilitychange`.
+4. When the tab becomes visible again, check at once, then continue every 5 s.
+5. Never run two checks at the same time.
+
+[`mock/preview.html`](../mock/preview.html) implements this schedule.
+
+**How fast a change reaches a visitor.** At worst about 12 s, and usually less:
+
+| Step | Delay |
+|---|---|
+| The tracker combines file events | up to 5 s |
+| The tracker sends the heartbeat | well under 1 s |
+| The status cache | up to 2 s |
+| The panel's next check | up to 5 s |
+
+Server-Sent Events or WebSockets could cut this to a few seconds, but a Worker needs a Durable Object to push one update to many visitors. This contract does not need them. They would change only the site, not the tracker or the messages.
 
 - Online appears only when the tracker is connected **and** at least one agent runs.
 - Token counts are not a bill. Do not show money or subscription limits.
@@ -390,9 +413,10 @@ WHERE excluded.observed_at_ms > workstation_daily.observed_at_ms;
 | Heartbeats | At most about 2,900 a day; 720 on a day with no agents | 30 s keepalive while agents run; 120 s while idle |
 | Row writes | At most about 5,800 a day | 2 rows for each heartbeat (live + daily) |
 | Daily rows | One for each day: about 365 a year | One row per `usageDate` |
-| Status reads | 2 rows for each request; depends on visitors | A panel that polls every 15 s makes 240 requests an hour for each open tab |
+| Status requests | 720 an hour for each visible tab | One check every 5 s. Hidden tabs make none. |
+| Status D1 reads | At most 2 rows every 2 s in each data center that serves visitors: up to 3,600 rows an hour | The 2 s Cache API entry answers the other requests |
 
-Compare these numbers with the current limits of your plan. Cloudflare's D1 free tier publishes a daily limit for rows written. This document did not check the current value, and the limits of ChatGPT Sites hosting are not known to this project. For the site panel, poll every 10–15 s and stop while the tab is hidden. The mock's preview polls every 2 s for local tests only.
+Compare these numbers with the current limits of your plan. Cloudflare publishes daily limits for D1 rows read and written, and for Worker requests. This document did not check the current values, and the limits of ChatGPT Sites hosting are not known to this project. The 2 s cache bounds the reads; Worker requests still grow with visible tabs.
 
 ## Versioning policy
 
@@ -508,4 +532,4 @@ The mock's own tests cover the same rules with a fake clock: `cd mock && npm tes
 |---|---|---|
 | Do the proposed paths fit the site? | Sites session | Use them as written. |
 | Does ChatGPT Sites give the Worker a D1 database, hosting secrets and a rate-limit feature? | Sites session | Not verified. Report what is available. |
-| Should the status endpoint be cached? | Sites session | Up to 5 s. |
+| Does ChatGPT Sites allow the Workers Cache API? | Sites session | Not verified. Without it, an in-memory copy of the status for 2 s in the Worker gives a similar saving per isolate. |

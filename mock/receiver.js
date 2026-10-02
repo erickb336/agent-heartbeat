@@ -23,6 +23,7 @@ export const HEARTBEAT_PATH = '/api/workstation/heartbeat';
 export const STATUS_PATH = '/api/workstation/status';
 export const MAX_BODY_BYTES = 4096;
 export const DEFAULT_TIME_ZONE = 'America/Los_Angeles';
+export const STATUS_CACHE_CONTROL = 'public, max-age=2';
 const RATE_LIMIT = 10; // accepted requests per window; the next one gets 429
 const RATE_WINDOW_MS = 1000;
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
@@ -194,7 +195,7 @@ export function createReceiver({
     const observedMs = Date.parse(message.observedAt);
     if (Math.abs(observedMs - receivedMs) > skewMs) return sendJson(res, 422, { error: 'clock_skew' });
     if (!apply(message, observedMs, receivedMs)) return sendJson(res, 409, { error: 'stale' });
-    res.writeHead(204).end();
+    res.writeHead(204, { 'cache-control': 'no-store' }).end();
   }
 
   /** @param {IncomingMessage} req @param {ServerResponse} res */
@@ -202,7 +203,8 @@ export function createReceiver({
     const path = pathOf(req.url);
     try {
       if (req.method === 'POST' && path === HEARTBEAT_PATH) await ingest(req, res);
-      else if (req.method === 'GET' && path === STATUS_PATH) sendJson(res, 200, snapshot());
+      // Shared caches may keep the status for 2 s, so many visitors cost one read per 2 s (docs/CONTRACT.md).
+      else if (req.method === 'GET' && path === STATUS_PATH) sendJson(res, 200, snapshot(), { 'cache-control': STATUS_CACHE_CONTROL });
       else if (req.method === 'GET' && path === '/') res.writeHead(200, PREVIEW_HEADERS).end(PREVIEW_HTML);
       else sendJson(res, 404, { error: 'not_found' });
     } catch {
